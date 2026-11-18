@@ -1,0 +1,49 @@
+name: Public dataset
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: public-dataset-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'latest' }}
+  cancel-in-progress: false
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - run: python3 -m unittest discover -s tests -v
+  publish:
+    needs: test
+    if: github.repository == 'ahe6/svdex-data' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Download the previous public snapshot
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 publish.py previous previous
+      - name: Export without authentication
+        run: |
+          if [ -d previous ]; then
+            python3 dataset.py export --output dist --previous previous
+          else
+            python3 dataset.py export --output dist
+          fi
+          python3 dataset.py verify dist
+          python3 dataset.py load dist check.sqlite
+      - name: Publish and verify latest download
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 publish.py publish dist
