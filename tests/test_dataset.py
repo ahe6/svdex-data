@@ -87,8 +87,10 @@ class DatasetTests(unittest.TestCase):
 
     def test_whisper_deleted_and_cross_topic_posts_are_excluded(self):
         post = GuestFixture.post(1, 17, 1)
-        for changes in ({'post_type': 4}, {'post_type': 3}, {'hidden': True}, {'deleted_at': 'now'}, {'user_deleted': True}, {'topic_id': 99}):
+        for changes in ({'post_type': 4}, {'post_type': 99}, {'hidden': True}, {'deleted_at': 'now'}, {'user_deleted': True}, {'topic_id': 99}):
             self.assertIsNone(post_record({**post, **changes}, 17, 'https://svdex.com'))
+        public_action = post_record({**post, 'post_type': 3, 'action_code': 'closed.enabled'}, 17, 'https://svdex.com')
+        self.assertEqual(public_action['action_code'], 'closed.enabled')
 
     def test_hidden_profile_facts_are_not_reconstructed_from_identity(self):
         self.assertIsNone(entity_record({'id': 1, 'username': 'hidden'}, 'companies', 'https://svdex.com'))

@@ -20,7 +20,7 @@ VERSION = 1
 TABLES = ('categories', 'tags', 'topics', 'posts', 'companies', 'funds', 'people', 'authors')
 MAX_BYTES = 128 * 1024 * 1024
 TOPIC_FIELDS = 'id category_id title slug created_at last_posted_at user_id reply_count views like_count closed archived'.split()
-POST_FIELDS = 'id topic_id user_id username name created_at updated_at post_number reply_to_post_number cooked'.split()
+POST_FIELDS = 'id topic_id user_id username name created_at updated_at post_number post_type action_code reply_to_post_number cooked'.split()
 LISTING_FIELDS = 'instrument_type summary terms valuation_cap conversion_discount strike_price expiration interest_rate offering_size funds_raised total_funding minimum post_money_valuation_usd company_tag_ids'.split()
 COMPANY_FIELDS = 'entity_type strategy_focus manager_name manager_url aum_usd fund_size_usd fund_size_basis fund_life vintage_year fund_domicile facts_as_of source_url kind total_funding_usd last_valuation_usd stage headquarters_country offerings open_offering open_offerings'.split()
 PERSON_FIELDS = 'background role focus location'.split()
@@ -108,7 +108,7 @@ def topic_record(topic, category_ids, base):
 
 
 def post_record(post, topic_id, base):
-    if post.get('topic_id') != topic_id or post.get('post_type') not in (1, 2) or post.get('hidden') or post.get('deleted_at') or post.get('user_deleted'):
+    if post.get('topic_id') != topic_id or post.get('post_type') not in (1, 2, 3) or post.get('hidden') or post.get('deleted_at') or post.get('user_deleted'):
         return None
     record = pick(post, POST_FIELDS)
     record['url'] = f'{base}/t/{topic_id}/{post["post_number"]}'
