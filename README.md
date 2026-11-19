@@ -72,6 +72,8 @@ posts join to topics and authors. Organization associations retain the public
 names, roles and links exposed by SVDEX. SQL views `offerings`, `products` and
 `replies` make common queries easier. Unknown financial facts remain null/empty;
 they are never replaced with invented values or zero.
+When SVDEX publishes a pre-sale's product link, `topics.presale.product_id`
+joins to that product's public entry in `topics`.
 
 Posts contain Discourse's rendered `cooked` HTML, not edit histories or internal
 raw fields. Treat all content as untrusted when displaying it. Original source
@@ -86,7 +88,9 @@ not independently verified facts.
 The exporter has **no login, API-key or cookie support**. It reads guest endpoints
 and constructs every output object from an explicit field allowlist. It skips
 restricted/unlisted/deleted topics, hidden/deleted posts, staff whispers and
-private-message topics. Pagination and full post streams are checked; missing
+private-message topics. It reads Discourse's guest topic filter independently of
+the site's feeds, so public topics such as past events are included. Native public
+category descriptions are included too. Pagination and full post streams are checked; missing
 pages fail the job rather than publish a known partial snapshot.
 
 No account email/IP/password data, private groups/messages/chat, private

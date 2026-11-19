@@ -38,7 +38,8 @@ def utcnow():
 class PublicRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         old, new = urllib.parse.urlsplit(req.full_url), urllib.parse.urlsplit(newurl)
-        if (old.scheme, old.netloc) != (new.scheme, new.netloc) or new.username or new.password or not new.path.startswith(('/c/', '/t/', '/categories', '/tags', '/listings/', '/people/')):
+        public_path = new.path == '/filter.json' or new.path.startswith(('/c/', '/t/', '/categories', '/tags', '/listings/', '/people/'))
+        if (old.scheme, old.netloc) != (new.scheme, new.netloc) or new.username or new.password or not public_path:
             raise ValueError('Redirect outside public API refused')
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
@@ -97,7 +98,7 @@ def topic_record(topic, category_ids, base):
     record['tag_ids'] = sorted(t['id'] for t in topic.get('tags', []) if tag_record(t))
     for key, fields in (
         ('svdex_listing', LISTING_FIELDS),
-        ('svdex_presale', ('summary', 'price', 'includes', 'delivery', 'terms')),
+        ('svdex_presale', ('summary', 'price', 'includes', 'delivery', 'terms', 'product_id')),
         ('svdex_product', ('summary',)),
     ):
         if isinstance(topic.get(key), dict):
@@ -169,22 +170,22 @@ def collect(client, max_pages=10000):
                 rows['tags'][record['id']] = record
 
     listed_topics = {}
-    for category_id in sorted(rows['categories']):
-        seen = set()
-        for page in range(max_pages):
-            data = client.get(f'/c/{category_id}/l/latest.json?page={page}')['topic_list']
-            topics = data['topics']
-            fresh = {t['id'] for t in topics} - seen
-            if topics and not fresh:
-                raise ValueError('Category pagination repeated a page')
-            seen.update(fresh)
-            for topic in topics:
-                if topic_record(topic, rows['categories'], client.base):
-                    listed_topics[topic['id']] = topic
-            if not data.get('more_topics_url'):
-                break
-        else:
-            raise ValueError('Category pagination exceeded limit; refusing a partial export')
+    seen = set()
+    # Latest feeds can be scoped by the UI, for example to upcoming events.
+    for page in range(max_pages):
+        data = client.get(f'/filter.json?q=order%3Acreated&page={page}')['topic_list']
+        topics = data['topics']
+        fresh = {topic['id'] for topic in topics} - seen
+        if topics and not fresh:
+            raise ValueError('Topic pagination repeated a page')
+        seen.update(fresh)
+        for topic in topics:
+            if topic_record(topic, rows['categories'], client.base):
+                listed_topics[topic['id']] = topic
+        if not data.get('more_topics_url'):
+            break
+    else:
+        raise ValueError('Topic pagination exceeded limit; refusing a partial export')
 
     # Some SVDEX lists omit native category-description topics for presentation.
     # Their public category metadata still explicitly links these public pages.
@@ -239,6 +240,11 @@ def collect(client, max_pages=10000):
                 raise ValueError('Directory ended before declared total')
         else:
             raise ValueError('Directory pagination exceeded limit')
+    for topic in rows['topics'].values():
+        presale = topic.get('presale', {})
+        product_id = presale.get('product_id')
+        if type(product_id) is not int or 'product' not in rows['topics'].get(product_id, {}):
+            presale.pop('product_id', None)
     return {name: sorted(records.values(), key=lambda row: row['id']) for name, records in rows.items()}
 
 

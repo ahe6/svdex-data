@@ -24,20 +24,28 @@ class GuestFixture:
                  'custom_fields': {'secret': 'NEVER_EXPORT'}, 'subcategory_list': [
                      {'id': 11, 'name': 'Public', 'read_restricted': False},
                      {'id': 8, 'name': 'Private', 'read_restricted': True}]},
-                {'id': 6, 'name': 'Discussion', 'read_restricted': False}]}}
+                {'id': 6, 'name': 'Discussion', 'read_restricted': False, 'topic_url': '/t/about-discussion/32'},
+                {'id': 7, 'name': 'Events', 'read_restricted': False},
+                {'id': 9, 'name': 'Products', 'read_restricted': False, 'subcategory_list': [
+                    {'id': 10, 'name': 'Pre-sales', 'read_restricted': False}]}]}}
         if path == '/tags.json':
             return {'tags': [{'id': 99, 'name': 'private-tag', 'pm_only': True}],
                     'extras': {'tag_groups': [{'name': 'Sectors', 'tags': [{'id': 4, 'name': 'finance', 'count': 1234}]}]}}
-        if path.startswith('/c/'):
-            if '/6/' in path:
-                return {'topic_list': {'topics': [self.topic(30, 6)]}}
-            if 'page=0' in path:
-                return {'topic_list': {'topics': [self.topic(17, 11)], 'more_topics_url': '/next'}}
-            return {'topic_list': {'topics': []}}
+        if path == '/filter.json?q=order%3Acreated&page=0':
+            return {'topic_list': {'topics': [self.topic(17, 11), self.topic(55, 8)], 'more_topics_url': '/next'}}
+        if path == '/filter.json?q=order%3Acreated&page=1':
+            return {'topic_list': {'topics': [
+                {**self.topic(30, 7), 'title': 'Past event'},
+                {**self.topic(42, 9), 'svdex_product': {'summary': 'Public product'}},
+                self.topic(43, 10), self.topic(44, 10)]}}
         if path == '/t/17.json':
             return {**self.topic(17, 11), 'post_stream': {'posts': [self.post(101, 17, 1)], 'stream': [101, 102, 103, 104, 105]}}
-        if path == '/t/30.json':
-            return {**self.topic(30, 6), 'post_stream': {'posts': [self.post(300, 30, 1)], 'stream': [300]}}
+        for topic_id, category_id in ((30, 7), (32, 6), (42, 9), (43, 10), (44, 10)):
+            if path == f'/t/{topic_id}.json':
+                topic = self.topic(topic_id, category_id)
+                if category_id == 10:
+                    topic['svdex_presale'] = {'product_id': 42 if topic_id == 43 else 55}
+                return {**topic, 'post_stream': {'posts': [self.post(topic_id * 10, topic_id, 1)], 'stream': [topic_id * 10]}}
         if path.startswith('/t/17/posts.json?'):
             return {'post_stream': {'posts': [self.post(102, 17, 2), self.post(103, 17, 3, post_type=4),
                                             self.post(104, 17, 4, hidden=True), self.post(105, 17, 5, deleted_at='yesterday')]}}
@@ -72,10 +80,12 @@ class DatasetTests(unittest.TestCase):
     def test_guest_export_covers_categories_pagination_and_full_reply_stream(self):
         client = GuestFixture()
         rows = collect(client)
-        self.assertEqual([r['id'] for r in rows['topics']], [17, 30])
-        self.assertEqual([r['id'] for r in rows['posts']], [101, 102, 300])
+        self.assertEqual([r['id'] for r in rows['topics']], [17, 30, 32, 42, 43, 44])
+        self.assertEqual([r['id'] for r in rows['posts']], [101, 102, 300, 320, 420, 430, 440])
+        self.assertEqual(rows['topics'][4]['presale']['product_id'], 42)
+        self.assertNotIn('product_id', rows['topics'][5]['presale'])
         self.assertNotIn('NEVER_EXPORT', json.dumps(rows))
-        self.assertFalse(any('/c/8/' in p for p in client.requests))
+        self.assertNotIn('/t/55.json', client.requests)
         self.assertTrue(any('/posts.json?' in p for p in client.requests))
         self.assertEqual(rows['tags'][0]['group'], 'Sectors')
         self.assertNotIn('count', rows['tags'][0])
